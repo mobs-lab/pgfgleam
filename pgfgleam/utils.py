@@ -12,7 +12,6 @@ from collections.abc import Iterable
 from itertools import product
 from datetime import date
 from scipy.optimize import fsolve
-from .cumulant import pdf_from_two_point_cumulants_NM
 
 def calculate_growth_rate(R0, infectious_period, latency_period, nb_latent_state=1, nb_infectious_state=1):
     """See the following paper:
