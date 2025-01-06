@@ -144,7 +144,8 @@ def get_detection_time(distribution, D, quantiles=[0.5], groupbycols=['label']):
     detection_time = detection_time.drop(columns=['norm'])
 
     #append stats
-    detection_time = append_stats(detection_time, quantiles, groupbycols)
+    if len(quantiles) > 0:
+        detection_time = append_stats(detection_time, quantiles, groupbycols)
 
     return detection_time
 
