@@ -93,12 +93,15 @@ def append_stats(distribution, quantiles, groupbycols, xcol='time'):
         df_['quantile'] = q
         df_list.append(df_)
 
-    quantile_df = pd.concat(df_list)
-    quantile_df.rename(columns={xcol:'value'},inplace=True)
-    quantile_df = quantile_df.pivot_table(values=['value'],index=groupbycols,
-                                  columns=['quantile'])['value'].reset_index()
-    quantile_df.columns = quantile_df.columns.astype(str)
-    stats_df = pd.merge(mean_df,quantile_df, on=groupbycols)
+    if len(df_list) > 0:
+        quantile_df = pd.concat(df_list)
+        quantile_df.rename(columns={xcol:'value'},inplace=True)
+        quantile_df = quantile_df.pivot_table(values=['value'],index=groupbycols,
+                                      columns=['quantile'])['value'].reset_index()
+        quantile_df.columns = quantile_df.columns.astype(str)
+        stats_df = pd.merge(mean_df,quantile_df, on=groupbycols)
+    else:
+        stats_df = mean_df
 
     #merge stats
     dist = dist.merge(stats_df, on=groupbycols)
@@ -144,8 +147,7 @@ def get_detection_time(distribution, D, quantiles=[0.5], groupbycols=['label']):
     detection_time = detection_time.drop(columns=['norm'])
 
     #append stats
-    if len(quantiles) > 0:
-        detection_time = append_stats(detection_time, quantiles, groupbycols)
+    detection_time = append_stats(detection_time, quantiles, groupbycols)
 
     return detection_time
 
