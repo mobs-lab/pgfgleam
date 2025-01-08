@@ -13,13 +13,13 @@ from itertools import product
 from datetime import date
 from scipy.optimize import fsolve
 
-def calculate_growth_rate(R0, infectious_period, latency_period, nb_latent_state=1, nb_infectious_state=1):
+def calculate_growth_rate(R0, infectious_period, latency_period, nb_latent_states=1, nb_infectious_states=1):
     """See the following paper:
         https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020174
     """
 
-    func = lambda r: R0 - r*(1 + r*latency_period/nb_latent_state)**nb_latent_state/\
-            (infectious_period**(-1)*(1 - (1 + r*infectious_period/nb_infectious_state)**(-nb_infectious_state)))
+    func = lambda r: R0 - r*(1 + r*latency_period/nb_latent_states)**nb_latent_states/\
+            (infectious_period**(-1)*(1 - (1 + r*infectious_period/nb_infectious_states)**(-nb_infectious_states)))
 
     return fsolve(func, 0.1)[0]
 
