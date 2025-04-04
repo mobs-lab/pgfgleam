@@ -4,17 +4,19 @@
 Probability generating function of a branching process on metapopulation network for early epidemic forecast.
 This module contains a class derived from BasePGF specific for the design of a sentinel surveillance system.
 
+NOTE: same as SentinelPGF, but importations are defined on origin-destination
+
 Author: Guillaume St-Onge <g.st-onge@northeastern.edu>
 """
 
 from .base_pgf import *
 from scipy.sparse import csr_array
 
-class SentinelPGF(BasePGF):
+class Sentinel2PGF(BasePGF):
     """SentinelPGF. PGF encoding the state of an agent-based system designed to track individuals who might
     might be detected by a sentinel surveillance system at airports."""
 
-    def __init__(self, umat, mmat, smat, latency_period, infectious_period, post_infectious_period,
+    def __init__(self, umat, mmat, smat, emat, latency_period, infectious_period, post_infectious_period,
                  nb_infectious_states=2, nb_post_infectious_states=2,  infection='poisson',
                  nb_microsteps=1, cumulant=False, umap=None, mmap=None, **kwargs):
         """__init__.
@@ -30,6 +32,8 @@ class SentinelPGF(BasePGF):
             Mobility matrix.
         smat : ndarray or sparse matrix
             Sentinel matrix specifying the detection on each origin-destination.
+        emat : ndarray or sparse matrix
+            Matrix of 0 and 1 specifying importation on each origin-destination.
         latency_period : float
             Mean time spent in the latent state [days].
         infectious_period : float
@@ -68,6 +72,10 @@ class SentinelPGF(BasePGF):
         nz_idx = self.smat.nonzero()
         self.smat_one = csr_array((np.ones(len(nz_idx[0])),nz_idx),shape=self.smat.shape)
 
+        #importation matrix
+        self.emat = emat.copy()
+        self.union_minus_emat = union_one - self.emat
+
         #rescale the periods on the scale of microsteps (and for each infectious/post_infectious state)
         self.latency_period = latency_period*nb_microsteps
         self.infectious_period = infectious_period*nb_microsteps/nb_infectious_states
@@ -75,7 +83,7 @@ class SentinelPGF(BasePGF):
 
     @classmethod
     def special_init(cls, config):
-        """Perform other extractions for the SentinelPGF class"""
+        """Perform other extractions for the Sentinel2PGF class"""
         other = dict()
         if 'smat' in config['structure']:
             other['smat'] = load_sparse(config['structure']['smat'])
@@ -84,8 +92,7 @@ class SentinelPGF(BasePGF):
     def get_initial_state_vars(self, value):
         vec = np.zeros(self.nb_types, dtype=complex)+value
         state_vars = {'latent': vec.copy(),
-                      'cumulative latent': vec.copy(),
-                      'cumulative importation': vec.copy()}
+                      'cumulative latent': vec.copy()}
         for j in range(self.nb_infectious_states):
             state_vars[f'infectious {j+1}'] = vec.copy()
         for j in range(self.nb_post_infectious_states):
@@ -95,6 +102,12 @@ class SentinelPGF(BasePGF):
         nb_nz = len(nz_idx[0])
         state_vars['cumulative detection'] = csr_array((np.zeros(nb_nz)+value, (nz_idx[0],nz_idx[1])),
                                                         shape=self.smat.shape, dtype=complex)
+
+        nz_idx = self.emat.nonzero() #index of nonzero elements for importation
+        nb_nz = len(nz_idx[0])
+        state_vars['cumulative importation'] = csr_array((np.zeros(nb_nz)+value, (nz_idx[0],nz_idx[1])),
+                                                        shape=self.emat.shape, dtype=complex)
+
         return state_vars
 
     def reaction_phase(self, state_vars):
@@ -133,7 +146,7 @@ class SentinelPGF(BasePGF):
         cumulative_importation = state_vars['cumulative importation']
 
         #latents move
-        state_vars['latent'] = self.mmat @ (cumulative_importation*latent) + self.mvec*latent
+        state_vars['latent'] = ((self.union_minus_emat + cumulative_importation) * self.mmat) @ latent + self.mvec*latent
 
         #infectious move
         mmat_ = self.mmat - self.smat_one * self.mmat + self.mmat * \
@@ -143,7 +156,7 @@ class SentinelPGF(BasePGF):
 
         for j in range(self.nb_infectious_states):
             infectious = state_vars[f'infectious {j+1}']
-            state_vars[f'infectious {j+1}'] = mmat_ @ (cumulative_importation*infectious) + self.mvec*infectious
+            state_vars[f'infectious {j+1}'] = ((self.union_minus_emat + cumulative_importation) * mmat_) @ infectious + self.mvec*infectious
 
         #post_infectious move
         for j in range(self.nb_post_infectious_states):
