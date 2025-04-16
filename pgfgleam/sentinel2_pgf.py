@@ -4,7 +4,9 @@
 Probability generating function of a branching process on metapopulation network for early epidemic forecast.
 This module contains a class derived from BasePGF specific for the design of a sentinel surveillance system.
 
-NOTE: same as SentinelPGF, but importations are defined on origin-destination
+NOTE: same as SentinelPGF, but:
+    - importations are defined on origin-destination using emat
+    - We implement a false postive rate of detection for the full sentinel system
 
 Author: Guillaume St-Onge <g.st-onge@northeastern.edu>
 """
@@ -18,7 +20,7 @@ class Sentinel2PGF(BasePGF):
 
     def __init__(self, umat, mmat, smat, emat, latency_period, infectious_period, post_infectious_period,
                  nb_infectious_states=2, nb_post_infectious_states=2,  infection='poisson',
-                 nb_microsteps=1, cumulant=False, umap=None, mmap=None, **kwargs):
+                 nb_microsteps=1, fpr=0., cumulant=False, umap=None, mmap=None, **kwargs):
         """__init__.
 
         If umat (mmat) is a list of ndarrays or matrices and umap (mmap) is not None, then
@@ -46,6 +48,8 @@ class Sentinel2PGF(BasePGF):
             Number of post_infectious states
         infection : str
             Type of offspring distribution for infectious agents.
+        fpr: float
+            Detection false positive rate per day for the full system
         cumulant : bool
             If true, turn the generating function into the cumulant generating function.
         umap : function
@@ -56,6 +60,9 @@ class Sentinel2PGF(BasePGF):
         super().__init__(umat, mmat, infection, nb_microsteps, cumulant, umap, mmap,**kwargs)
         self.nb_infectious_states = nb_infectious_states
         self.nb_post_infectious_states = nb_post_infectious_states
+
+        #false positive for detection
+        self.fpr = fpr
 
         #get a sparse matrix that is the union of all possible mmat (all possible origin-destination)
         if self.mmat_list:
@@ -102,6 +109,10 @@ class Sentinel2PGF(BasePGF):
         nb_nz = len(nz_idx[0])
         state_vars['cumulative detection'] = csr_array((np.zeros(nb_nz)+value, (nz_idx[0],nz_idx[1])),
                                                         shape=self.smat.shape, dtype=complex)
+
+        #false positive detection; we introduce a fp tracker variable that encapsulates the PGF tracking fp
+        state_vars['cumulative fp'] = np.array([value],dtype=complex)
+        state_vars['fp tracker'] = np.array([value],dtype=complex)
 
         nz_idx = self.emat.nonzero() #index of nonzero elements for importation
         nb_nz = len(nz_idx[0])
@@ -163,6 +174,9 @@ class Sentinel2PGF(BasePGF):
             post_infectious = state_vars[f'post_infectious {j+1}']
             state_vars[f'post_infectious {j+1}'] = mmat_ @ post_infectious + self.mvec*post_infectious
 
+        #we introduce false positive detections here as a bernoulli process per day
+        state_vars['fp tracker'] = state_vars['fp tracker'] *\
+                (1 - self.fpr + self.fpr * state_vars['cumulative fp'])
 
     def add_initial_conditions(self, idx, weight=None, nb_infectious=0, nb_latent=0, label=None, **kwargs):
         """add_initial_condition.
@@ -186,12 +200,11 @@ class Sentinel2PGF(BasePGF):
             if weight is None or len(weight) != len(idx) or not np.isclose(1.,sum(weight)):
                 raise ValueError("weight ill-defined")
             else:
-                self.Psi0[label] = lambda state_vars: \
+                self.Psi0[label] = lambda state_vars: np.sum(state_vars['fp tracker'])*\
                         np.sum(weight*state_vars["latent"][idx]*state_vars["cumulative latent"][idx])**nb_latent*\
                         np.sum(weight*state_vars["infectious 1"][idx]*state_vars["cumulative latent"][idx])**nb_infectious
         else:
-            self.Psi0[label] = lambda state_vars: \
+            self.Psi0[label] = lambda state_vars: np.sum(state_vars['fp tracker'])*\
                     (state_vars["latent"][idx]*state_vars["cumulative latent"][idx])**nb_latent*\
                     (state_vars["infectious 1"][idx]*state_vars["cumulative latent"][idx])**nb_infectious
         #NOTE: we assume initial infectious were "latent" at some point in the past
-
