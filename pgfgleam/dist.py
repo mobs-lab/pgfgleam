@@ -238,3 +238,34 @@ def two_point_distribution(Psi, t, transform_dict, cutoff1=50, cutoff2=50, resol
 
     return results
 
+
+def two_point_p00(Psi, t, transform_dict):
+    """two_point_p00. Get the (0,0) term of the joint PGF expansion (probability both variables are 0)
+
+    See marginal_distribution for an example of transform.
+
+    Parameters
+    ----------
+    Psi : PGF object
+        Main generating function.
+    t : array_like
+        Time at which to evaluate the pgf
+    transform_dict : dict
+        Dictionary of list of transform functions. The key is the time at which the transform is applied. Two
+        of them should have c1_ or c2_ as argument to transform the variables
+    """
+
+    #state variables
+    state_vars = Psi.get_initial_state_vars(1.)
+
+    distribution = Psi(state_vars, t, transform_dict=transform_dict, c1_=0, c2_=0)
+
+    #transform output in dataframe format
+    results = pd.DataFrame(columns=['label','time','target1','target2','probability'])
+    results['probability'] = np.concatenate([distribution[label] for label in distribution])
+    results['target1'] = np.tile([0], len(t)*len(distribution))
+    results['target2'] = np.tile([0], len(t)*len(distribution))
+    results['time'] = np.tile(t, len(distribution))
+    results['label'] = list(np.repeat(list(distribution.keys()), len(t), axis=0))
+
+    return results
